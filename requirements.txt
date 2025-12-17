@@ -1,0 +1,15 @@
+# Dependencias principales
+opencv-python==4.8.1.78         # Captura de video y procesamiento de imágenes
+mediapipe==0.10.9               # Framework de ML para detección de pose y manos
+numpy==1.24.3                   # Operaciones matemáticas y matriciales
+
+# Dependencias opcionales para mejoras futuras
+# pillow==10.1.0                # Procesamiento adicional de imágenes
+# matplotlib==3.8.2             # Visualización de datos (para análisis)
+# scipy==1.11.4                 # Cálculos científicos avanzados
+
+# Notas de compatibilidad:
+# - Python 3.10.x o 3.11.x recomendado
+# - OpenCV requiere numpy
+# - MediaPipe tiene mejor soporte en Python 3.10
+# - En sistemas Linux puede requerir: libgl1-mesa-glx
