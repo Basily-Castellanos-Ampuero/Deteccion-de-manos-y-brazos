@@ -259,16 +259,25 @@ class PoseDetector:
         """
         Libera recursos del detector.
         """
-        if self.pose:
-            self.pose.close()
-            if config.DEBUG_MODE:
-                print("[PoseDetector] Recursos liberados")
+        try:
+            if hasattr(self, 'pose') and self.pose is not None:
+                self.pose.close()
+                self.pose = None
+                if config.DEBUG_MODE:
+                    print("[PoseDetector] Recursos liberados")
+        except Exception:
+            # Ignorar errores al cerrar (MediaPipe ya puede estar cerrado)
+            pass
     
     def __del__(self):
         """
         Destructor para asegurar liberación de recursos.
         """
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            # Ignorar errores durante destrucción
+            pass
 
 
 # Constantes útiles para índices de landmarks
