@@ -282,16 +282,25 @@ class HandDetector:
         """
         Libera recursos del detector.
         """
-        if self.hands:
-            self.hands.close()
-            if config.DEBUG_MODE:
-                print("[HandDetector] Recursos liberados")
+        try:
+            if hasattr(self, 'hands') and self.hands is not None:
+                self.hands.close()
+                self.hands = None
+                if config.DEBUG_MODE:
+                    print("[HandDetector] Recursos liberados")
+        except Exception:
+            # Ignorar errores al cerrar (MediaPipe ya puede estar cerrado)
+            pass
     
     def __del__(self):
         """
         Destructor para asegurar liberación de recursos.
         """
-        self.close()
+        try:
+            self.close()
+        except Exception:
+            # Ignorar errores durante destrucción
+            pass
 
 
 class HandLandmarks:
