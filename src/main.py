@@ -15,6 +15,7 @@ from camera_handler import CameraHandler
 from pose_detector import PoseDetector
 from hand_detector import HandDetector
 from skeleton_renderer import SkeletonRenderer
+from hand_catcher_game import HandCatcherGame
 
 # Importar utilidades
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -32,7 +33,7 @@ class PoseDetectionApp:
         Inicializa la aplicación y todos sus componentes.
         """
         print("=" * 60)
-        print("aplicacion de deteccion de brazos y manos")
+        print(" APLICACIÓN DE DETECCIÓN DE POSE Y MANOS")
         print("=" * 60)
         
         # Componentes principales
@@ -55,6 +56,10 @@ class PoseDetectionApp:
         # Estado de detección
         self.pose_detected = False
         self.hands_detected = 0
+        
+        # Minijuego
+        self.game = None
+        self.game_active = False
         
         # Directorio para screenshots
         self.screenshot_dir = os.path.join(
@@ -103,11 +108,17 @@ class PoseDetectionApp:
             self.renderer = SkeletonRenderer()
             print("    Renderizador listo")
             
+            # Inicializar minijuego
+            print("   • Inicializando minijuego...")
+            width, height = self.camera.get_frame_dimensions()
+            self.game = HandCatcherGame(width, height)
+            print("    Minijuego listo")
+            
             print("\n Todos los componentes inicializados correctamente")
             return True
             
         except Exception as e:
-            print(f"\nError al inicializar componentes: {str(e)}")
+            print(f"\n Error al inicializar componentes: {str(e)}")
             return False
     
     def process_frame(self, frame):
@@ -131,32 +142,37 @@ class PoseDetectionApp:
         pose_landmarks = None
         hand_landmarks = None
         
-        # Detectar pose
-        if config.ENABLE_POSE_DETECTION and self.pose_detector:
+        # Detectar pose (solo si no está el juego activo o si está habilitado)
+        if config.ENABLE_POSE_DETECTION and self.pose_detector and not self.game_active:
             self.pose_detected = self.pose_detector.detect(frame)
             if self.pose_detected:
                 pose_landmarks = self.pose_detector.get_landmarks()
         
-        # Detectar manos
+        # Detectar manos (siempre, porque el juego las necesita)
         if config.ENABLE_HAND_DETECTION and self.hand_detector:
             hands_found = self.hand_detector.detect(frame)
             if hands_found:
                 self.hands_detected = self.hand_detector.get_num_hands_detected()
                 hand_landmarks = self.hand_detector.get_hands_landmarks()
         
-        # Renderizar esqueleto combinado
-        if pose_landmarks or hand_landmarks:
-            frame = self.renderer.draw_combined_skeleton(
-                frame, pose_landmarks, hand_landmarks
+        # Si el juego está activo, procesar lógica del juego
+        if self.game_active and self.game:
+            self.game.update(hand_landmarks)
+            self.game.draw(frame)
+        else:
+            # Modo normal: renderizar esqueleto
+            if pose_landmarks or hand_landmarks:
+                frame = self.renderer.draw_combined_skeleton(
+                    frame, pose_landmarks, hand_landmarks
+                )
+            
+            # Añadir overlay con información
+            frame = self.renderer.add_overlay(
+                frame,
+                pose_detected=self.pose_detected,
+                hands_detected=self.hands_detected,
+                fps=self.fps
             )
-        
-        # Añadir overlay con información
-        frame = self.renderer.add_overlay(
-            frame,
-            pose_detected=self.pose_detected,
-            hands_detected=self.hands_detected,
-            fps=self.fps
-        )
         
         return frame
     
@@ -201,7 +217,7 @@ class PoseDetectionApp:
         elif key == config.KEY_PAUSE:
             self.is_paused = not self.is_paused
             status = "PAUSADO" if self.is_paused else "REANUDADO"
-            print(f"{status}")
+            print(f"  {status}")
         
         # Toggle detector de manos (H)
         elif key == config.KEY_TOGGLE_HANDS:
@@ -213,13 +229,28 @@ class PoseDetectionApp:
         elif key == config.KEY_TOGGLE_POSE:
             config.ENABLE_POSE_DETECTION = not config.ENABLE_POSE_DETECTION
             status = "activado" if config.ENABLE_POSE_DETECTION else "desactivado"
-            print(f"Detector de pose {status}")
+            print(f" Detector de pose {status}")
         
         # Toggle modo espejo (M)
         elif key == config.KEY_TOGGLE_MIRROR:
             config.MIRROR_MODE = not config.MIRROR_MODE
             status = "activado" if config.MIRROR_MODE else "desactivado"
             print(f" Modo espejo {status}")
+        
+        # Toggle minijuego (G)
+        elif key == ord('g'):
+            self.game_active = not self.game_active
+            if self.game_active:
+                print(" Minijuego ACTIVADO")
+                if self.game:
+                    self.game.reset()
+            else:
+                print(" Minijuego DESACTIVADO - Modo normal")
+        
+        # Reiniciar juego (R) - solo cuando game over
+        elif key == ord('r'):
+            if self.game_active and self.game and self.game.game_over:
+                self.game.reset()
         
         return True
     
@@ -228,7 +259,7 @@ class PoseDetectionApp:
         Captura y guarda un screenshot del frame actual.
         """
         if not hasattr(self, 'last_frame') or self.last_frame is None:
-            print("⚠️  No hay frame disponible para capturar")
+            print("  No hay frame disponible para capturar")
             return
         
         # Generar nombre de archivo con timestamp
@@ -240,7 +271,7 @@ class PoseDetectionApp:
         if save_screenshot(self.last_frame, filepath):
             print(f" Screenshot guardado: {filename}")
         else:
-            print(" Error al guardar screenshot")
+            print("❌ Error al guardar screenshot")
     
     def print_instructions(self):
         """
@@ -255,6 +286,12 @@ class PoseDetectionApp:
         print("  H        - Activar/Desactivar detección de manos")
         print("  B        - Activar/Desactivar detección de pose (Body)")
         print("  M        - Activar/Desactivar modo espejo (Mirror)")
+        print("  G        - Activar/Desactivar MINIJUEGO")
+        print("  R        - Reiniciar minijuego (cuando termina)")
+        print("=" * 60)
+        print("\n MINIJUEGO:")
+        print("  Círculos amarillos = Atrapar con mano ABIERTA")
+        print("  Cuadrados magenta = Atrapar con mano CERRADA")
         print("=" * 60)
         print("\n Presiona cualquier tecla para iniciar...")
         input()
@@ -265,7 +302,7 @@ class PoseDetectionApp:
         """
         # Inicializar componentes
         if not self.initialize_components():
-            print("❌ Error: No se pudieron inicializar los componentes")
+            print(" Error: No se pudieron inicializar los componentes")
             return
         
         # Mostrar instrucciones
@@ -316,12 +353,12 @@ class PoseDetectionApp:
                 
                 # Mostrar estadísticas cada 100 frames
                 if config.DEBUG_MODE and self.frame_count % 100 == 0:
-                    print(f"Frame: {self.frame_count} | FPS: {self.fps:.1f} | "
+                    print(f" Frame: {self.frame_count} | FPS: {self.fps:.1f} | "
                           f"Pose: {'✓' if self.pose_detected else '✗'} | "
                           f"Manos: {self.hands_detected}")
         
         except KeyboardInterrupt:
-            print("\n Interrupción por teclado (Ctrl+C)")
+            print("\n  Interrupción por teclado (Ctrl+C)")
         
         except Exception as e:
             print(f"\n Error durante la ejecución: {str(e)}")
@@ -335,7 +372,7 @@ class PoseDetectionApp:
         """
         Limpia y libera todos los recursos.
         """
-        print("\nLimpiando recursos...")
+        print("\n Limpiando recursos...")
         
         # Cerrar ventanas
         cv2.destroyAllWindows()
@@ -343,20 +380,20 @@ class PoseDetectionApp:
         # Liberar cámara
         if self.camera:
             self.camera.release()
-            print("   Cámara liberada")
+            print("    Cámara liberada")
         
         # Liberar detectores
         if self.pose_detector:
             self.pose_detector.close()
-            print("   Detector de pose cerrado")
+            print("    Detector de pose cerrado")
         
         if self.hand_detector:
             self.hand_detector.close()
-            print("   Detector de manos cerrado")
+            print("    Detector de manos cerrado")
         
         # Mostrar estadísticas finales
         print("\n" + "=" * 60)
-        print("ESTADÍSTICAS FINALES")
+        print(" ESTADÍSTICAS FINALES")
         print("=" * 60)
         print(f"  Frames procesados: {self.frame_count}")
         if self.fps_history:
@@ -364,7 +401,7 @@ class PoseDetectionApp:
             print(f"  FPS promedio: {avg_fps:.2f}")
         print("=" * 60)
         
-        print("\nAplicación finalizada correctamente")
+        print("\n Aplicación finalizada correctamente")
 
 
 def main():
